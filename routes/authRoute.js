@@ -4,47 +4,57 @@ const bcrypt=require('bcryptjs');
 const User=require('./../models/User');
 const {generateJWTToken}=require('./../utils/jwtUtils')
 const {authenticateJWT}=require('./../middlewares/authMiddleware')
+const validator = require('validator'); 
 
 //Routes user for Registration 
-router.post('/register',async(req,res)=>{
-    try{
-        //check if user already exists
-        const existingUser=await User.findOne({email:req.body.email});
-        if(existingUser){
-            return res.status(400).json({message:'User Already Exists'});
-        }
-        if(req.body.password.length<8){
-            return res.status(400).json({message:'Password must Be Atleast 8 characters long'});
+router.post('/register', async (req, res) => {
+    try {
+        // Check if the email is valid
+        if (!validator.isEmail(req.body.email)) {
+            return res.status(400).json({ message: 'Invalid email address' });
         }
 
-        //Hash the password with saltround of 10
-        const hashedPassword=await bcrypt.hash(req.body.password,10);
-        
-        
-          // Determine if the user is registering as an admin
-          let role = 'user'; // Default role
-          if (req.body.admin) {
-              role = 'admin';
-          }
+        // Check if the username is valid
+        if (!validator.isAlphanumeric(req.body.username)) {
+            return res.status(400).json({ message: 'Username must be alphanumeric' });
+        }
 
-        //Create a new User
-        const newUser=new User({
-            username:req.body.username,
-            email:req.body.email,
-            password:hashedPassword,
+        // Check if user already exists
+        const existingUser = await User.findOne({ $or: [{ email: req.body.email }, { username: req.body.username }] });
+        if (existingUser) {
+            return res.status(400).json({ message: 'User with this email or username already exists' });
+        }
+
+        // Check if password is long enough
+        if (req.body.password.length < 8) {
+            return res.status(400).json({ message: 'Password must be at least 8 characters long' });
+        }
+
+        // Hash the password with saltround of 10
+        const hashedPassword = await bcrypt.hash(req.body.password, 10);
+
+        // Determine if the user is registering as an admin
+        let role = 'user'; // Default role
+        if (req.body.admin) {
+            role = 'admin';
+        }
+
+        // Create a new User
+        const newUser = new User({
+            username: req.body.username,
+            email: req.body.email,
+            password: hashedPassword,
             role: role // Assign the determined role
         });
 
-        
-
-        //Save the User to the Database
+        // Save the User to the Database
         await newUser.save();
 
-        res.status(201).json({message:'User Registered Successfully'});
+        res.status(201).json({ message: 'User Registered Successfully' });
 
-    }catch(error){
-        console.error('Error Registering User',error);
-        res.status(500).json({message:'Internal Server error'});
+    } catch (error) {
+        console.error('Error Registering User', error);
+        res.status(500).json({ message: 'Internal Server error' });
     }
 });
 
@@ -54,14 +64,14 @@ router.post('/login',async(req,res)=>{
         //Find the user by email
         const user=await User.findOne({email:req.body.email});
         if(!user){
-            return res.status(401).json({message:'Invalid Email or Password'});
+            return res.status(401).json({message:'Invalid Email'});
         }
 
         //Compare the provided Password with Hashed password
 
         const isPasswordValid= await bcrypt.compare(req.body.password,user.password);
         if(!isPasswordValid){
-            return res.status(401).json({message:'Invalid Email or Password'});
+            return res.status(401).json({message:'Invalid Password'});
         }
         
         //If authentication is successful ,Generate a JWT Token
